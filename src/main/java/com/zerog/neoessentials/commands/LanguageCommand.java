@@ -84,6 +84,7 @@ public class LanguageCommand {
 
         try {
             CustomLanguageManager.getInstance().reload();
+            MessageUtil.reloadTranslations();
             int count = CustomLanguageManager.getInstance().getCustomLanguages().size();
 
             source.sendSuccess(() -> MessageUtil.success("Successfully reloaded custom languages ({0} loaded).", count), true);
@@ -201,6 +202,7 @@ public class LanguageCommand {
         CommandSourceStack source = ctx.getSource();
 
         source.sendSuccess(() -> MessageUtil.success("═══ NeoEssentials Language System ═══"), false);
+        source.sendSuccess(() -> MessageUtil.info("Configured Language: §e{0}", com.zerog.neoessentials.config.ConfigManager.getLanguage()), false);
         source.sendSuccess(() -> MessageUtil.info("The language system supports custom translations."), false);
         source.sendSuccess(() -> MessageUtil.info(""), false);
         source.sendSuccess(() -> MessageUtil.info("§eAvailable Commands:"), false);
@@ -219,8 +221,7 @@ public class LanguageCommand {
         source.sendSuccess(() -> MessageUtil.info("  1. Use §e/language template <code>§7 to generate a template"), false);
         source.sendSuccess(() -> MessageUtil.info("  2. Translate the text in the template file"), false);
         source.sendSuccess(() -> MessageUtil.info("  3. Save as §e<code>.json§7 in §eneoessentials/languages/custom/"), false);
-        source.sendSuccess(() -> MessageUtil.info("  4. Run §e/language reload"), false);
-
+        source.sendSuccess(() -> MessageUtil.info("  4. Set language in config.json and run §e/language reload"), false);
         return 1;
     }
 }

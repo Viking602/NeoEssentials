@@ -26,7 +26,6 @@ public class CustomLanguageManager {
     private static CustomLanguageManager INSTANCE;
     // Use only the correct path under the mod's data directory
     private static final String LANG_DIR = "neoessentials/languages/custom/";
-    private static final String LANG_FILE = "en_us.json";
     private final Path customLangDir;
     private final Path templatesDir;
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
@@ -64,7 +63,8 @@ public class CustomLanguageManager {
             Files.createDirectories(templatesDir);
 
             // Ensure language file exists (copy from JAR if missing or empty/invalid)
-            Path langFile = customLangDir.resolve(LANG_FILE);
+            String langFileName = com.zerog.neoessentials.config.ConfigManager.getLanguage() + ".json";
+            Path langFile = customLangDir.resolve(langFileName);
             boolean needsCopy = false;
             if (!Files.exists(langFile)) {
                 needsCopy = true;
@@ -81,12 +81,20 @@ public class CustomLanguageManager {
                 }
             }
             if (needsCopy) {
-                try (InputStream in = findLangResource(LANG_FILE)) {
+                try (InputStream in = findLangResource(langFileName)) {
                     if (in != null) {
                         Files.copy(in, langFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                         LOGGER.info("Copied language file from JAR: {}", langFile.toAbsolutePath());
                     } else {
-                        LOGGER.error("Failed to copy language file: Resource not found for {}!", LANG_FILE);
+                        LOGGER.error("Failed to copy language file: Resource not found for {}!", langFileName);
+                        if (!"en_us.json".equals(langFileName)) {
+                            try (InputStream fallbackIn = findLangResource("en_us.json")) {
+                                if (fallbackIn != null) {
+                                    Files.copy(fallbackIn, langFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                                    LOGGER.info("Copied en_us.json fallback to: {}", langFile.toAbsolutePath());
+                                }
+                            }
+                        }
                     }
                 } catch (Exception e) {
                     LOGGER.error("Exception while copying language file from JAR: {}", e.getMessage(), e);

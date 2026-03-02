@@ -33,6 +33,15 @@ public class MessageUtil {
         return debugMode;
     }
     private static final Logger LOGGER = LoggerFactory.getLogger(MessageUtil.class);
+    private static String currentLanguage = "en_us";
+
+    private static String getConfiguredLanguage() {
+        try {
+            return com.zerog.neoessentials.config.ConfigManager.getLanguage();
+        } catch (Exception e) {
+            return "en_us";
+        }
+    }
     private static final Map<String, String> translations = new HashMap<>();
     private static boolean loaded = false;
     private static boolean debugMode = false; // Default to false, will sync with config
@@ -54,8 +63,10 @@ public class MessageUtil {
     private static void loadTranslations() {
         if (loaded) return;
         loaded = true;
+        currentLanguage = getConfiguredLanguage();
 
         LOGGER.info("=== LOADING NEOESSENTIALS TRANSLATIONS ===");
+        LOGGER.info("Configured language: {}", currentLanguage);
 
         // Use the same logic as CustomLanguageManager for the language directory
         File customLangDir = getNeoEssentialsLangCustomDir();
@@ -68,22 +79,22 @@ public class MessageUtil {
             }
         }
         File serverLangFile = new File(customLangDir, "en_us.json");
-        LOGGER.info("Server language file path: {}", serverLangFile.getAbsolutePath());
+        LOGGER.info("Server base language file path: {}", serverLangFile.getAbsolutePath());
 
         // Always load from custom directory if file exists and is readable
-        Map<String, String> finalTranslations = null;
+        Map<String, String> baseTranslations = null;
         if (serverLangFile.exists() && serverLangFile.length() > 0) {
-            finalTranslations = loadServerTranslations(serverLangFile);
-            if (finalTranslations != null) {
-                translations.putAll(finalTranslations);
-                LOGGER.info("Successfully loaded {} translations from custom directory", translations.size());
+            baseTranslations = loadServerTranslations(serverLangFile);
+            if (baseTranslations != null) {
+                translations.putAll(baseTranslations);
+                LOGGER.info("Successfully loaded {} base translations from custom directory", translations.size());
             } else {
                 LOGGER.error("Failed to load custom language file, will attempt to update from JAR");
             }
         }
         // If file missing or unreadable, update from JAR
         if (translations.isEmpty()) {
-            Map<String, String> jarTranslations = loadJarTranslations();
+            Map<String, String> jarTranslations = loadJarTranslations("en_us.json");
             if (jarTranslations == null || jarTranslations.isEmpty()) {
                 LOGGER.error("Failed to load JAR translations - cannot proceed");
                 try (InputStream testIn = ResourceUtil.getJarLangResource("en_us.json")) {
@@ -102,9 +113,9 @@ public class MessageUtil {
                 updateServerLanguageFile(serverLangFile, jarTranslations);
                 if (serverLangFile.exists()) {
                     LOGGER.info("Language file successfully created: {}", serverLangFile.getAbsolutePath());
-                    finalTranslations = loadServerTranslations(serverLangFile);
-                    if (finalTranslations != null) {
-                        translations.putAll(finalTranslations);
+                    baseTranslations = loadServerTranslations(serverLangFile);
+                    if (baseTranslations != null) {
+                        translations.putAll(baseTranslations);
                         LOGGER.info("Successfully loaded {} translations from custom directory after update", translations.size());
                     } else {
                         LOGGER.error("Failed to load custom language file after update, using JAR translations directly");
@@ -117,6 +128,39 @@ public class MessageUtil {
             } catch (Exception e) {
                 LOGGER.error("Exception during language file update: {}", e.getMessage(), e);
                 translations.putAll(jarTranslations);
+            }
+        }
+
+        // Load configured language on top of en_us if it's different
+        if (!"en_us".equals(currentLanguage)) {
+            File configuredLangFile = new File(customLangDir, currentLanguage + ".json");
+            Map<String, String> configuredTranslations = null;
+            
+            if (configuredLangFile.exists() && configuredLangFile.length() > 0) {
+                configuredTranslations = loadServerTranslations(configuredLangFile);
+                if (configuredTranslations != null) {
+                    translations.putAll(configuredTranslations);
+                    LOGGER.info("Successfully loaded configured language '{}' overriding base translations", currentLanguage);
+                }
+            }
+            
+            // If custom file missing, try to load from JAR
+            if (configuredTranslations == null) {
+                Map<String, String> jarTranslations = loadJarTranslations(currentLanguage + ".json");
+                if (jarTranslations != null && !jarTranslations.isEmpty()) {
+                    translations.putAll(jarTranslations);
+                    LOGGER.info("Loaded configured language '{}' from JAR overriding base translations", currentLanguage);
+                    
+                    // Deploy to custom dir for future editing
+                    try {
+                        updateServerLanguageFile(configuredLangFile, jarTranslations);
+                        LOGGER.info("Deployed '{}' language file to custom directory", currentLanguage);
+                    } catch (Exception e) {
+                        LOGGER.error("Failed to deploy '{}' language file to custom directory: {}", currentLanguage, e.getMessage());
+                    }
+                } else {
+                    LOGGER.warn("Configured language '{}' not found in custom directory or JAR, falling back to en_us", currentLanguage);
+                }
             }
         }
         LOGGER.info("=== TRANSLATION LOADING COMPLETE ===");
@@ -134,8 +178,8 @@ public class MessageUtil {
     /**
      * Load translations from JAR resource
      */
-    private static Map<String, String> loadJarTranslations() {
-        try (InputStream in = ResourceUtil.getJarLangResource("en_us.json")) {
+    private static Map<String, String> loadJarTranslations(String fileName) {
+        try (InputStream in = ResourceUtil.getJarLangResource(fileName)) {
             if (in != null) {
                 try (java.util.Scanner scanner = new java.util.Scanner(in, java.nio.charset.StandardCharsets.UTF_8).useDelimiter("\\A")) {
                     String json = scanner.hasNext() ? scanner.next() : "";
@@ -303,8 +347,14 @@ public class MessageUtil {
      * Ensures all keys from the JAR are present in the server language file.
      */
     public static void ensureLanguageFileUpToDate() {
-        File serverLangFile = ResourceUtil.getLanguageFile("en_us");
-        Map<String, String> jarTranslations = loadJarTranslations();
+        String lang = "en_us";
+        try {
+            lang = com.zerog.neoessentials.config.ConfigManager.getLanguage();
+        } catch (Exception e) {
+            // ignored
+        }
+        File serverLangFile = ResourceUtil.getLanguageFile(lang);
+        Map<String, String> jarTranslations = loadJarTranslations(lang + ".json");
         Map<String, String> serverTranslations = loadServerTranslations(serverLangFile);
         boolean needsUpdate = false;
         if (jarTranslations == null) {
@@ -354,11 +404,29 @@ public class MessageUtil {
         File langFile = new File(langDir, "en_us.json");
         logInfo("[Lang] Working directory: " + System.getProperty("user.dir"));
         logInfo("[Lang] Resolved language file path: " + langFile.getAbsolutePath());
+        String langFileName = "en_us.json";
+        try {
+            langFileName = com.zerog.neoessentials.config.ConfigManager.getLanguage() + ".json";
+        } catch (Exception e) {
+            // ignored
+        }
         if (!langFile.exists() || langFile.length() == 0) {
             logInfo("Custom language file not found or empty: " + langFile.getAbsolutePath());
-            try (InputStream in = ResourceUtil.getJarLangResource("en_us.json")) {
+            try (InputStream in = ResourceUtil.getJarLangResource(langFileName)) {
                 if (in == null) {
-                    logError("Default language resource not found in JAR: data/lang/en_us.json");
+                    logError("Default language resource not found in JAR: data/lang/" + langFileName);
+                    // Fallback to en_us.json if the configured language doesn't exist in JAR
+                    if (!"en_us.json".equals(langFileName)) {
+                        logInfo("Attempting to fallback to en_us.json");
+                        try (InputStream fallbackIn = ResourceUtil.getJarLangResource("en_us.json")) {
+                            if (fallbackIn != null) {
+                                Files.createDirectories(langFile.getParentFile().toPath());
+                                Files.copy(fallbackIn, langFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                                logInfo("Generated custom language file using en_us.json fallback");
+                                return;
+                            }
+                        }
+                    }
                     return;
                 }
                 Files.createDirectories(langFile.getParentFile().toPath());
@@ -371,7 +439,6 @@ public class MessageUtil {
             logInfo("Custom language file exists: " + langFile.getAbsolutePath());
         }
     }
-
     private static void logInfo(String msg) {
         System.out.println("[NeoEssentials-Lang] INFO: " + msg);
     }

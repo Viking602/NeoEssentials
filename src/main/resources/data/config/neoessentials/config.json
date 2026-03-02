@@ -1,7 +1,9 @@
 {
-  "_configVersion": 20,
+  "_configVersion": 21,
   "_configVersion_comment": "DO NOT MODIFY: This field is used by NeoEssentials for automatic config updates. Changing this may cause config corruption.",
   "modules": {
+    "language": "en_us",
+    "language_comment": "Server language for all in-game messages. Supported: en_us, zh_cn, de_de, es_es, fr_fr, nl_nl, pl_pl, pt_br, ru_ru. Place custom .json files in neoessentials/languages/custom/ to add more.",
     "economyEnabled": true,
     "permissionsEnabled": true,
     "kitsEnabled": true,

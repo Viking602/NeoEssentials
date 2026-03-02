@@ -1184,6 +1184,25 @@ public class ConfigManager {
 
     // Configuration file names
     public static final String MAIN_CONFIG = "config.json";
+
+    /**
+     * Gets the language setting from modules.language.
+     * Returns "en_us" if not set or invalid.
+     */
+    public static String getLanguage() {
+        JsonObject config = getInstance().getConfig(MAIN_CONFIG);
+        if (config.has("modules")) {
+            JsonObject modules = config.getAsJsonObject("modules");
+            if (modules.has("language")) {
+                String lang = modules.get("language").getAsString();
+                if (lang != null && !lang.trim().isEmpty()) {
+                    return lang.trim().toLowerCase();
+                }
+            }
+        }
+        return "en_us";
+    }
+
     public static final String ECONOMY_CONFIG = "economy.json";
     public static final String PERMISSIONS_CONFIG = "permissions.json";
     public static final String KITS_CONFIG = "kits.json";
