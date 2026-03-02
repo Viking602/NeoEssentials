@@ -20,7 +20,9 @@ import org.slf4j.LoggerFactory;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -118,9 +120,17 @@ public class CommandExecutionHandler implements HttpHandler {
         try {
             // Create command source for dashboard
             CommandSourceStack source = createDashboardCommandSource(server, output);
-            
-            // Execute command on server thread
-            int result = server.getCommands().getDispatcher().execute(command, source);
+
+            // Execute command on the server thread to avoid ReentrantBlockableEventLoop violations
+            final String finalCommand = command;
+            CompletableFuture<Integer> commandFuture = CompletableFuture.supplyAsync(() -> {
+                try {
+                    return server.getCommands().getDispatcher().execute(finalCommand, source);
+                } catch (com.mojang.brigadier.exceptions.CommandSyntaxException e) {
+                    throw new RuntimeException(e);
+                }
+            }, server);
+            int result = commandFuture.get(30, TimeUnit.SECONDS);
             
             // Add to history
             addToHistory(command, result > 0, String.join("\n", output));
@@ -138,6 +148,21 @@ public class CommandExecutionHandler implements HttpHandler {
             
             sendJsonResponse(exchange, 200, response);
             
+        } catch (java.util.concurrent.ExecutionException ee) {
+            // Unwrap ExecutionException to surface the actual cause (e.g. CommandSyntaxException)
+            Throwable cause = ee.getCause() != null ? ee.getCause() : ee;
+            String errorMsg = cause.getMessage();
+            LOGGER.error("Error executing command: {}", command, cause);
+
+            addToHistory(command, false, "Error: " + errorMsg);
+
+            JsonObject response = new JsonObject();
+            response.addProperty("success", false);
+            response.addProperty("command", command);
+            response.addProperty("error", errorMsg);
+            response.addProperty("executionId", executionId);
+
+            sendJsonResponse(exchange, 200, response);
         } catch (Exception e) {
             LOGGER.error("Error executing command: {}", command, e);
             

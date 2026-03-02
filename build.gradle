@@ -37,6 +37,7 @@ println "Build #${buildNumber}"
 println "=========================================="
 
 repositories {
+    mavenCentral()
     // For local mod jars
     flatDir {
         dirs 'libs'

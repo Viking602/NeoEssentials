@@ -105,13 +105,13 @@ public class AdminEndpoint implements HttpHandler {
                     try {
                         Thread.sleep(5000);
 
-                        // Save all worlds
-                        LOGGER.info("Saving all worlds before restart...");
-                        server.saveAllChunks(true, true, true);
-
-                        // Stop server
-                        LOGGER.info("Stopping server for restart...");
-                        server.halt(false);
+                        // Schedule save and halt on the server thread to avoid threading violations
+                        server.execute(() -> {
+                            LOGGER.info("Saving all worlds before restart...");
+                            server.saveAllChunks(true, true, true);
+                            LOGGER.info("Stopping server for restart...");
+                            server.halt(false);
+                        });
 
                         // Note: Actual restart depends on how the server is launched
                         // Most server wrappers detect shutdown and restart automatically
@@ -167,13 +167,13 @@ public class AdminEndpoint implements HttpHandler {
                     try {
                         Thread.sleep(5000);
 
-                        // Save all worlds
-                        LOGGER.info("Saving all worlds before shutdown...");
-                        server.saveAllChunks(true, true, true);
-
-                        // Stop server
-                        LOGGER.info("Stopping server...");
-                        server.halt(false);
+                        // Schedule save and halt on the server thread to avoid threading violations
+                        server.execute(() -> {
+                            LOGGER.info("Saving all worlds before shutdown...");
+                            server.saveAllChunks(true, true, true);
+                            LOGGER.info("Stopping server...");
+                            server.halt(false);
+                        });
 
                     } catch (InterruptedException e) {
                         LOGGER.error("Stop interrupted", e);
